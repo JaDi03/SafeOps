@@ -196,41 +196,48 @@ export default function App() {
     }));
   };
 
+  // ── Continuous Monitoring Loop ──
+  useEffect(() => {
+    let interval;
+    if (isSystemActive) {
+      // Analyze immediately on start
+      startOperation();
+      
+      // Then analyze every 10 seconds
+      interval = setInterval(() => {
+        startOperation();
+      }, 10000);
+    }
+    return () => clearInterval(interval);
+  }, [isSystemActive]);
+
   const startOperation = async () => {
-    setIsSystemActive(true);
-    
-    // Collect all slots that have a file
     const activeSlots = Object.values(slots).filter(s => s.file);
     if (activeSlots.length === 0) {
-      alert("Please upload at least one image/video first.");
-      setIsSystemActive(false);
+      if (isSystemActive) setIsSystemActive(false);
       return;
     }
     
-    // Set loading for all
+    // Set loading state for active slots
     setSlots(prev => {
       const next = { ...prev };
-      activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: true, data: null }; });
+      activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: true }; });
       return next;
     });
 
     try {
-      // Send all files to the new multi-analyze endpoint
-      // Note: We use the existing analyzeScene but modified to handle multiple if possible, 
-      // or we can just send the first one for now if the API is not fully multi-part yet.
-      // For the hackathon demo, we'll send them as a batch.
       const result = await analyzeScene(activeSlots.map(s => s.file));
+      setAnalysisResult(result);
       
-      // Distribute results back to slots or show as a global result
       setSlots(prev => {
         const next = { ...prev };
         activeSlots.forEach(s => {
-          next[s.id] = { ...next[s.id], loading: false, data: result };
+          next[s.id] = { ...next[s.id], loading: false, data: result.field_report };
         });
         return next;
       });
     } catch (err) {
-      console.error(`Multi-view analysis failed:`, err);
+      console.error(`Sentinel analysis cycle failed:`, err);
       setSlots(prev => {
         const next = { ...prev };
         activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: false }; });
@@ -281,29 +288,42 @@ export default function App() {
           <div className="header-title">SafeOps Enterprise</div>
           <div className="header-subtitle">Multi-Agent: Robotics-ER 1.6 + Gemini 2.5 Pro</div>
         </div>
-        <div className="header-status">
-          <button className="btn btn-outline btn-sm" style={{ marginRight: 10 }} onClick={() => setIsPolicyOpen(true)}>⚙️ Policy</button>
+        <div className="header-status flex items-center gap-4">
+          <button className="btn btn-outline btn-sm" onClick={() => setIsPolicyOpen(true)}>⚙️ Policy</button>
           
-          {!isSystemActive ? (
-            <button 
-              className="btn btn-primary btn-sm" 
-              style={{ background: 'var(--safe)', borderColor: 'var(--safe)', marginRight: 10 }}
-              onClick={startOperation}
-            >
-              🚀 START OPERATION
-            </button>
-          ) : (
-            <button 
-              className="btn btn-primary btn-sm" 
-              style={{ background: 'var(--critical)', borderColor: 'var(--critical)', marginRight: 10 }}
-              onClick={stopOperation}
-            >
-              🛑 STOP SYSTEM
-            </button>
-          )}
+          <div className="flex gap-4 items-center">
+            {!isSystemActive ? (
+              <button
+                onClick={() => setIsSystemActive(true)}
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl font-bold hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all flex items-center gap-2"
+              >
+                🚀 START SENTINEL
+              </button>
+            ) : (
+              <button
+                onClick={stopOperation}
+                className="px-8 py-3 bg-red-500/20 text-red-400 border border-red-500/50 rounded-xl font-bold shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all flex items-center gap-2"
+              >
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                🛑 STOP SYSTEM
+              </button>
+            )}
 
-          <button className="btn btn-primary btn-sm" onClick={handleGenerateReport}>📝 Report</button>
+            <button 
+              className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-white font-bold"
+              onClick={handleGenerateReport}
+            >
+              📝 REPORT
+            </button>
+          </div>
         </div>
+
+        {lastAnalysisTime && isSystemActive && (
+          <div className="flex items-center gap-2 mb-6 px-4 py-2 bg-white/5 rounded-lg border border-white/10 w-fit">
+            <span className="text-xs text-white/40 uppercase tracking-widest font-medium">Last Intelligence Sync:</span>
+            <span className="text-xs text-blue-400 font-mono">{lastAnalysisTime}</span>
+          </div>
+        )}
       </header>
 
       <main className="main-content">
