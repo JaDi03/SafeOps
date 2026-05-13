@@ -15,38 +15,52 @@ from datetime import datetime
 
 from .field_operator import FieldOperator
 from .auditor import Auditor
+from .supervisor import Supervisor
 
 logger = logging.getLogger("safeops.orchestrator")
 
 
 class Orchestrator:
     """
-    The glue between agents. Routes data through the pipeline:
-    Image → FieldOperator → (if hazards) → Auditor → Combined Result
+    The brain of SafeOps v3.0.
+    Supervisor (Pro) -> Field Operator (ER 1.6) -> Auditor (Pro)
     """
 
     def __init__(self):
         self.field_operator = FieldOperator()
         self.auditor = Auditor()
+        self.supervisor = Supervisor()
         self.pipeline_history: list[dict] = []
-        logger.info("Orchestrator initialized — 2 agents ready")
+        logger.info("Orchestrator v3.0 initialized — 3 agents ready")
 
-    async def analyze(self, image_bytes: bytes, mime_type: str = "image/jpeg", task: str = "general") -> dict:
+    async def analyze(self, image_data_list: list[dict], task: str = "general") -> dict:
         """
-        Main entry point. Runs the full agent pipeline.
+        Main entry point. Runs the full agent pipeline with Multi-View Fusion.
         
         Args:
-            image_bytes: Raw image/video bytes
-            mime_type: MIME type of the media
+            image_data_list: list of {"bytes": raw_bytes, "mime_type": "...", "slot_id": "..."}
             task: "general" | "trajectory" | "gauge" | "robot_response"
-        
-        Returns:
-            Combined result from all agents + pipeline_log
         """
         pipeline_log = []
         total_start = time.time()
 
-        # ── Step 1: Field Operator ────────────────────────────────────
+        # ── Step 1: Supervisor (Strategic Orchestration) ──────────────
+        step0_start = time.time()
+        pipeline_log.append({
+            "agent": "SUPERVISOR",
+            "model": self.supervisor.MODEL,
+            "status": "running",
+            "task": "orchestration",
+            "started_at": datetime.utcnow().isoformat(),
+        })
+        
+        slots_meta = [{"id": img.get("slot_id"), "mime": img.get("mime_type")} for img in image_data_list]
+        strat_plan = await self.supervisor.orchestrate(slots_meta)
+        
+        pipeline_log[-1]["status"] = "complete"
+        pipeline_log[-1]["duration_ms"] = int((time.time() - step0_start) * 1000)
+
+        # ── Step 2: Field Operator (Spatial Analysis) ─────────────────
         step1_start = time.time()
         pipeline_log.append({
             "agent": "FIELD_OPERATOR",
@@ -56,31 +70,14 @@ class Orchestrator:
             "started_at": datetime.utcnow().isoformat(),
         })
 
-        if task == "trajectory":
-            field_report = await self.field_operator.analyze_trajectory(image_bytes, mime_type)
-        elif task == "gauge":
-            field_report = await self.field_operator.read_gauge(image_bytes, mime_type)
-        elif task == "robot_response":
-            # First analyze, then plan response
-            field_report = await self.field_operator.analyze_scene(image_bytes, mime_type)
-            hazards = field_report.get("hazards", [])
-            if hazards:
-                robot_result = await self.field_operator.plan_robot_response(
-                    hazard_data={"hazards": hazards},
-                    image_bytes=image_bytes,
-                    mime_type=mime_type,
-                )
-                field_report["function_calls"] = robot_result.get("function_calls", [])
-                field_report["robot_reasoning"] = robot_result.get("reasoning", "")
-        else:
-            field_report = await self.field_operator.analyze_scene(image_bytes, mime_type)
+        # Process as multi-view fusion
+        field_report = await self.field_operator.analyze_scene(image_data_list, task=task)
 
-        step1_ms = int((time.time() - step1_start) * 1000)
         pipeline_log[-1]["status"] = "complete"
-        pipeline_log[-1]["duration_ms"] = step1_ms
+        pipeline_log[-1]["duration_ms"] = int((time.time() - step1_start) * 1000)
         pipeline_log[-1]["hazards_found"] = len(field_report.get("hazards", []))
 
-        # ── Step 2: Auditor (only if hazards detected) ────────────────
+        # ── Step 3: Auditor (Compliance) ──────────────────────────────
         audit_result = None
         hazards = field_report.get("hazards", [])
 
@@ -94,25 +91,40 @@ class Orchestrator:
                 "started_at": datetime.utcnow().isoformat(),
             })
 
-            # Prepare history for trend analysis
-            recent_reports = [h.get("field_report", {}) for h in self.pipeline_history[-10:]]
-
             audit_result = await self.auditor.audit_incident(
                 field_report=field_report,
-                analysis_history=recent_reports,
+                analysis_history=[h.get("field_report", {}) for h in self.pipeline_history[-5:]]
             )
 
-            step2_ms = int((time.time() - step2_start) * 1000)
             pipeline_log[-1]["status"] = "complete"
-            pipeline_log[-1]["duration_ms"] = step2_ms
-            pipeline_log[-1]["violations_found"] = len(audit_result.get("violations", []))
+            pipeline_log[-1]["duration_ms"] = int((time.time() - step2_start) * 1000)
         else:
             pipeline_log.append({
                 "agent": "AUDITOR",
                 "model": self.auditor.MODEL,
                 "status": "skipped",
-                "reason": "No hazards detected by Field Operator",
+                "reason": "No hazards detected",
             })
+
+        # ── Combine Results ───────────────────────────────────────────
+        total_ms = int((time.time() - total_start) * 1000)
+        combined = {
+            **field_report,
+            "audit": audit_result,
+            "supervisor_plan": strat_plan,
+            "pipeline_log": pipeline_log,
+            "total_processing_ms": total_ms,
+            "agents_used": ["SUPERVISOR", "FIELD_OPERATOR"] + (["AUDITOR"] if audit_result else []),
+        }
+
+        self.pipeline_history.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "field_report": field_report,
+            "audit": audit_result,
+            "total_ms": total_ms,
+        })
+
+        return combined
 
         # ── Combine Results ───────────────────────────────────────────
         total_ms = int((time.time() - total_start) * 1000)

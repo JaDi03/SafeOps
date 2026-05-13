@@ -27,6 +27,5 @@ dist-ssr/
 .vscode/
 .idea/
 
-# OS
-.DS_Store
-Thumbs.db
+# Project Documents
+docs/

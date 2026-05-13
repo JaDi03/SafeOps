@@ -10,9 +10,13 @@ const WS_BASE  = import.meta.env.VITE_WS_URL  || 'ws://localhost:8000';
 
 /* ── REST Helpers ──────────────────────────────────────────────── */
 
-async function postFile(endpoint, file) {
+async function postFiles(endpoint, files) {
   const form = new FormData();
-  form.append('file', file);
+  if (Array.isArray(files)) {
+    files.forEach(f => form.append('files', f));
+  } else {
+    form.append('files', files);
+  }
   const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', body: form });
   if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.json();
@@ -36,14 +40,14 @@ async function get(endpoint) {
 
 /* ── Public API ────────────────────────────────────────────────── */
 
-/** Full safety scene analysis (file upload). */
-export async function analyzeScene(file) {
-  return postFile('/api/analyze', file);
+/** Full safety scene analysis (single or multiple file upload). */
+export async function analyzeScene(files) {
+  return postFiles('/api/analyze', files);
 }
 
-/** Full safety analysis from base64 image (webcam frame). */
-export async function analyzeBase64(imageBase64, mimeType = 'image/jpeg') {
-  return postJSON('/api/analyze/base64', { image: imageBase64, mime_type: mimeType });
+/** Full safety analysis from multiple base64 images (webcam frames). */
+export async function analyzeMultiBase64(imagesPayload) {
+  return postJSON('/api/analyze/multi', { images: imagesPayload });
 }
 
 /** Object detection with bounding boxes. */

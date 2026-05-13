@@ -112,35 +112,49 @@ async def health():
     }
 
 
-# ── Scene Analysis (Full Pipeline) ───────────────────────────────────
+# ── Scene Analysis (Full Pipeline v3.0) ──────────────────────────────
 
 @app.post("/api/analyze")
-async def analyze_scene(file: UploadFile = File(...)):
+async def analyze_scene(files: list[UploadFile] = File(...)):
     """
-    Full multi-agent analysis pipeline.
-    Field Operator detects → Auditor validates compliance.
+    Multi-agent analysis pipeline with Multi-View Fusion.
+    Receives multiple files and processes them as a single scene.
     """
-    image_bytes = await file.read()
-    mime_type = file.content_type or "image/jpeg"
+    image_data_list = []
+    for file in files:
+        content = await file.read()
+        image_data_list.append({
+            "bytes": content,
+            "mime_type": file.content_type or "image/jpeg",
+            "slot_id": file.filename # Using filename as temporary slot reference
+        })
 
     orchestrator: Orchestrator = app.state.orchestrator
-    result = await orchestrator.analyze(image_bytes, mime_type, task="general")
+    result = await orchestrator.analyze(image_data_list, task="general")
 
     await _broadcast({"type": "analysis", "data": result})
     return result
 
 
-@app.post("/api/analyze/base64")
-async def analyze_scene_base64(payload: dict):
-    """Analyze a base64-encoded image (webcam frames)."""
-    image_b64 = payload.get("image", "")
-    mime_type = payload.get("mime_type", "image/jpeg")
-    if "," in image_b64:
-        image_b64 = image_b64.split(",", 1)[1]
-    image_bytes = base64.b64decode(image_b64)
+@app.post("/api/analyze/multi")
+async def analyze_multi_base64(payload: dict):
+    """Analyze multiple base64-encoded images for spatial fusion."""
+    images_payload = payload.get("images", []) # list of {"image": "b64", "mime_type": "...", "slot_id": "..."}
+    
+    image_data_list = []
+    for img in images_payload:
+        image_b64 = img.get("image", "")
+        if "," in image_b64:
+            image_b64 = image_b64.split(",", 1)[1]
+        
+        image_data_list.append({
+            "bytes": base64.b64decode(image_b64),
+            "mime_type": img.get("mime_type", "image/jpeg"),
+            "slot_id": img.get("slot_id")
+        })
 
     orchestrator: Orchestrator = app.state.orchestrator
-    result = await orchestrator.analyze(image_bytes, mime_type, task="general")
+    result = await orchestrator.analyze(image_data_list, task="general")
 
     await _broadcast({"type": "analysis", "data": result})
     return result

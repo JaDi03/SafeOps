@@ -220,26 +220,38 @@ class FieldOperator:
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
         logger.info(f"FieldOperator agent initialized — model={self.MODEL}")
 
-    async def analyze_scene(self, image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
-        """Full safety analysis with spatial reasoning."""
+    async def analyze_scene(self, images: list[dict], task: str = "general") -> dict:
+        """
+        Analyze one or multiple images with spatial reasoning and code execution.
+        images: list of {"bytes": b64_bytes, "mime_type": "..."}
+        """
         start = time.time()
         try:
+            # Prepare parts for multi-view or single view
+            content_parts = []
+            for img in images:
+                content_parts.append(types.Part.from_bytes(data=img["bytes"], mime_type=img["mime_type"]))
+            
+            # Add system prompt
+            prompt = _build_system_prompt()
+            if len(images) > 1:
+                prompt += "\n\nMULTI-VIEW ANALYSIS: You are receiving multiple camera feeds. Fuse them into a single spatial understanding. Identify if objects in Cam 1 are moving towards zones in Cam 2/3/4."
+            
+            content_parts.append(prompt)
+
             response = self.client.models.generate_content(
                 model=self.MODEL,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    _build_system_prompt(),
-                ],
+                contents=content_parts,
                 config=types.GenerateContentConfig(
-                    temperature=0.3,
+                    temperature=0.2,
                     thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                    tools=[types.Tool(code_execution=types.ToolCodeExecution)],
                 ),
             )
             result = _parse_json(response.text)
             result["processing_time_ms"] = int((time.time() - start) * 1000)
             result["agent"] = self.AGENT_NAME
-            logger.info(f"[{self.AGENT_NAME}] Scene analyzed — risk={result.get('overall_risk_score')}, "
-                        f"hazards={len(result.get('hazards', []))}, time={result['processing_time_ms']}ms")
+            logger.info(f"[{self.AGENT_NAME}] Scene analyzed ({len(images)} views) — risk={result.get('overall_risk_score')}, time={result['processing_time_ms']}ms")
             return result
         except Exception as e:
             logger.error(f"[{self.AGENT_NAME}] Scene analysis failed: {e}")

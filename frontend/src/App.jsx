@@ -191,39 +191,44 @@ export default function App() {
   const startOperation = async () => {
     setIsSystemActive(true);
     
-    // Analyze each slot that has a file but no data
-    const activeSlots = Object.values(slots).filter(s => s.file && !s.data);
+    // Collect all slots that have a file
+    const activeSlots = Object.values(slots).filter(s => s.file);
+    if (activeSlots.length === 0) {
+      alert("Please upload at least one image/video first.");
+      setIsSystemActive(false);
+      return;
+    }
     
-    // We update loading state for all first
+    // Set loading for all
     setSlots(prev => {
       const next = { ...prev };
-      activeSlots.forEach(s => {
-        next[s.id] = { ...next[s.id], loading: true };
-      });
+      activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: true, data: null }; });
       return next;
     });
 
-    // Run analyses in parallel
-    await Promise.all(activeSlots.map(async (slot) => {
-      try {
-        let result;
-        if (slot.id === 's1') result = await analyzeScene(slot.file);
-        else if (slot.id === 's2') result = await analyzeTrajectory(slot.file);
-        else if (slot.id === 's3') result = await readGauge(slot.file);
-        else if (slot.id === 's4') result = await planRobotResponse(slot.file);
-        
-        setSlots(prev => ({
-          ...prev,
-          [slot.id]: { ...prev[slot.id], loading: false, data: result }
-        }));
-      } catch (err) {
-        console.error(`Analysis failed for ${slot.id}:`, err);
-        setSlots(prev => ({
-          ...prev,
-          [slot.id]: { ...prev[slot.id], loading: false }
-        }));
-      }
-    }));
+    try {
+      // Send all files to the new multi-analyze endpoint
+      // Note: We use the existing analyzeScene but modified to handle multiple if possible, 
+      // or we can just send the first one for now if the API is not fully multi-part yet.
+      // For the hackathon demo, we'll send them as a batch.
+      const result = await analyzeScene(activeSlots.map(s => s.file));
+      
+      // Distribute results back to slots or show as a global result
+      setSlots(prev => {
+        const next = { ...prev };
+        activeSlots.forEach(s => {
+          next[s.id] = { ...next[s.id], loading: false, data: result };
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error(`Multi-view analysis failed:`, err);
+      setSlots(prev => {
+        const next = { ...prev };
+        activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: false }; });
+        return next;
+      });
+    }
   };
 
   const stopOperation = () => {
@@ -319,22 +324,40 @@ export default function App() {
               <div className="card-header"><div className="card-title">🧠 Agent Pipeline</div></div>
               <div className="card-body">
                 <div className="reasoning-box">
-                  {Object.values(slots).filter(s => s.data).map((s, i) => (
+                  {Object.values(slots).filter(s => s.data).slice(0, 1).map((s, i) => (
                     <div key={i} style={{ marginBottom: 16 }}>
+                      {/* Supervisor Strategic Plan */}
+                      {s.data.supervisor_plan && (
+                        <div style={{ marginBottom: 12, padding: 10, background: 'rgba(59,130,246,0.05)', borderRadius: 6, border: '1px dashed #3b82f6' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <span style={{ background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 800 }}>SUPERVISOR</span>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Gemini 2.5 Pro (Strategic Orchestrator)</span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>Strategic Plan:</div>
+                          <div style={{ fontSize: '0.8rem', marginBottom: 6 }}>{s.data.supervisor_plan.orchestration_plan?.reasoning}</div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {s.data.supervisor_plan.orchestration_plan?.priority_zones?.map(z => (
+                              <span key={z} style={{ fontSize: '0.6rem', background: 'rgba(59,130,246,0.2)', padding: '1px 5px', borderRadius: 3 }}>📍 {z}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Field Operator Output */}
                       <div style={{ marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <span style={{ background: '#3b82f6', color: '#fff', padding: '2px 6px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 800 }}>FIELD OPERATOR</span>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Robotics-ER 1.6</span>
+                          <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Robotics-ER 1.6 (Spatial Expert)</span>
                         </div>
                         <div style={{ fontSize: '0.8rem' }}>{s.data.ai_reasoning || s.data.reasoning || 'Analysis complete.'}</div>
                       </div>
+
                       {/* Auditor Output */}
                       {s.data.audit && (
                         <div style={{ borderLeft: '3px solid #f59e0b', paddingLeft: 10 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <span style={{ background: '#f59e0b', color: '#000', padding: '2px 6px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 800 }}>AUDITOR</span>
-                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Gemini 2.5 Pro</span>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Gemini 2.5 Pro (OSHA Expert)</span>
                           </div>
                           <div style={{ fontSize: '0.8rem' }}>{s.data.audit.executive_summary}</div>
                           {s.data.audit.violations?.map((v, vi) => (
@@ -346,6 +369,7 @@ export default function App() {
                           ))}
                         </div>
                       )}
+                      
                       {/* Pipeline Log */}
                       {s.data.pipeline_log && (
                         <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
@@ -358,7 +382,7 @@ export default function App() {
                       )}
                     </div>
                   ))}
-                  {!Object.values(slots).some(s => s.data) && "Awaiting input — Upload media to activate the agent pipeline..."}
+                  {!Object.values(slots).some(s => s.data) && "Awaiting input — Upload media to activate the multi-agent pipeline..."}
                 </div>
               </div>
             </div>
