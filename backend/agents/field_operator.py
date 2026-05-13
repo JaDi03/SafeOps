@@ -222,48 +222,57 @@ class FieldOperator:
 
     async def analyze_scene(self, images: list[dict], task: str = "general") -> dict:
         """
-        Analyze one or multiple images with spatial reasoning and code execution.
-        images: list of {"bytes": b64_bytes, "mime_type": "..."}
+        Analyze one or multiple images with spatial reasoning.
+        Automatically disables code execution if video is present to avoid API conflicts.
         """
         start = time.time()
         try:
-            # Prepare parts for multi-view or single view
             content_parts = []
+            has_video = False
+            
+            # 1. Filter and normalize parts
             for img in images:
                 orig_mime = img.get("mime_type", "image/jpeg")
-                
-                # STRICT FILTERING for Code Execution compatibility
                 valid_mime = None
-                if "image" in orig_mime:
-                    valid_mime = "image/jpeg" # Normalize all images to jpeg
-                elif "video" in orig_mime and "text" not in orig_mime:
-                    valid_mime = "video/mp4" # Normalize all videos to mp4
+                
+                if "video" in orig_mime:
+                    valid_mime = "video/mp4"
+                    has_video = True
+                elif "image" in orig_mime:
+                    valid_mime = "image/jpeg"
                 
                 if valid_mime:
-                    logger.info(f"[{self.AGENT_NAME}] Including part: {valid_mime} (original: {orig_mime})")
                     content_parts.append(types.Part.from_bytes(data=img["bytes"], mime_type=valid_mime))
-                else:
-                    logger.warning(f"[{self.AGENT_NAME}] DISCARDING unsupported mime type: {orig_mime}")
 
             if not content_parts:
                 return _error_result("No valid images/videos provided after filtering", 0, self.AGENT_NAME)
 
-            # Add system prompt
+            # 2. Configure Tools (Safety guard for video + code_execution)
+            tools = []
+            if not has_video:
+                tools.append(types.Tool(code_execution=types.ToolCodeExecution))
+                logger.info(f"[{self.AGENT_NAME}] Code Execution ENABLED")
+            else:
+                logger.info(f"[{self.AGENT_NAME}] Code Execution DISABLED (Video mode)")
+
+            # 3. Add system prompt
             prompt = _build_system_prompt()
             if len(content_parts) > 1:
-                prompt += "\n\nMULTI-VIEW ANALYSIS: You are receiving multiple camera feeds. Fuse them into a single spatial understanding. Identify if objects in Cam 1 are moving towards zones in Cam 2/3/4."
+                prompt += "\n\nMULTI-VIEW ANALYSIS: You are receiving multiple camera feeds. Fuse them into a single spatial understanding."
             
             content_parts.append(prompt)
 
+            # 4. Generate content
             response = self.client.models.generate_content(
                 model=self.MODEL,
                 contents=content_parts,
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    # Note: thinking_budget and code_execution together on video can be tricky
-                    tools=[types.Tool(code_execution=types.ToolCodeExecution)],
+                    tools=tools,
                 ),
             )
+
+            # 5. Parse and return
             result = _parse_json(response.text)
             result["processing_time_ms"] = int((time.time() - start) * 1000)
             result["agent"] = self.AGENT_NAME
