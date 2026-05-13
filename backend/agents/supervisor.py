@@ -73,7 +73,10 @@ class Supervisor:
             response = self.client.models.generate_content(
                 model=self.MODEL,
                 contents=[prompt, user_content],
-                config=types.GenerateContentConfig(temperature=0.1),
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                ),
             )
             
             result = self._parse_json(response.text)

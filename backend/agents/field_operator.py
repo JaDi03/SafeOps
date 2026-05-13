@@ -268,6 +268,7 @@ class FieldOperator:
                 contents=content_parts,
                 config=types.GenerateContentConfig(
                     temperature=0.1,
+                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
                     tools=tools,
                 ),
             )

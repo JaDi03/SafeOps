@@ -13,7 +13,7 @@ class Settings:
     # Gemini
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_ROBOTICS_MODEL: str = "gemini-robotics-er-1.6-preview"
-    GEMINI_PRO_MODEL: str = "gemini-2.5-flash"
+    GEMINI_PRO_MODEL: str = "gemini-2.5-pro"
     GEMINI_FLASH_MODEL: str = "gemini-2.5-flash"
 
     # Server
