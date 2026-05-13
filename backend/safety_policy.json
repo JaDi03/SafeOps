@@ -1,0 +1,24 @@
+{
+  "plant_name": "SafeOps Industrial Complex",
+  "safety_rules": {
+    "ppe_requirements": ["helmet", "safety_glasses", "high_visibility_vest"],
+    "restricted_zones": ["high_voltage_area", "chemical_storage"],
+    "max_occupancy_per_zone": 5
+  },
+  "gauge_thresholds": {
+    "temperature": {
+      "normal_max": 45.0,
+      "critical_min": 70.0,
+      "unit": "Celsius"
+    },
+    "pressure": {
+      "normal_max": 80.0,
+      "critical_min": 120.0,
+      "unit": "PSI"
+    }
+  },
+  "robot_protocols": {
+    "default_observation_distance": 2.0,
+    "emergency_shutdown_enabled": true
+  }
+}
