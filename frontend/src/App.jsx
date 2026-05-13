@@ -54,58 +54,66 @@ const ViewSlot = ({ id, title, icon, onFileSelect, preview, loading, data, speci
     const scaleX = (x) => (x / 1000) * width;
     const scaleY = (y) => (y / 1000) * height;
 
+    // ── Draw Bounding Boxes (Detected Objects) ──
     if (data.detected_objects) {
       data.detected_objects.forEach(obj => {
-        if (obj.bounding_box) {
-          const b = obj.bounding_box;
+        // Robotics-ER returns box_2d as [ymin, xmin, ymax, xmax]
+        const box = obj.box_2d || obj.bounding_box;
+        if (box && Array.isArray(box)) {
+          const [ymin, xmin, ymax, xmax] = box;
           ctx.strokeStyle = '#3b82f6';
           ctx.lineWidth = 2;
-          ctx.strokeRect(scaleX(b.xmin), scaleY(b.ymin), scaleX(b.xmax - b.xmin), scaleY(b.ymax - b.ymin));
+          ctx.strokeRect(scaleX(xmin), scaleY(ymin), scaleX(xmax - xmin), scaleY(ymax - ymin));
+          
           ctx.fillStyle = '#3b82f6';
-          ctx.font = '10px Inter';
-          ctx.fillText(obj.label, scaleX(b.xmin), scaleY(b.ymin) - 5);
+          ctx.font = 'bold 12px Inter';
+          ctx.fillText(obj.label || obj.category, scaleX(xmin), scaleY(ymin) - 5);
         }
       });
     }
 
+    // ── Draw Hazards (Red Dots) ──
     if (data.hazards) {
       data.hazards.forEach(h => {
-        if (h.location) {
+        // Robotics-ER returns location as [y, x]
+        const loc = h.location;
+        if (loc && Array.isArray(loc)) {
+          const [y, x] = loc;
           ctx.fillStyle = h.risk_level === 'critical' ? '#ef4444' : '#f59e0b';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = ctx.fillStyle;
           ctx.beginPath();
-          ctx.arc(scaleX(h.location.x), scaleY(h.location.y), 6, 0, Math.PI * 2);
+          ctx.arc(scaleX(x), scaleY(y), 8, 0, Math.PI * 2);
           ctx.fill();
           ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
           ctx.stroke();
+          ctx.shadowBlur = 0;
         }
       });
     }
 
-    if (data.trajectories) {
-      data.trajectories.forEach(t => {
-        if (t.points && t.points.length > 1) {
-          ctx.strokeStyle = '#10b981';
-          ctx.setLineDash([5, 5]);
-          ctx.beginPath();
-          ctx.moveTo(scaleX(t.points[0].x), scaleY(t.points[0].y));
-          for (let i = 1; i < t.points.length; i++) {
-            ctx.lineTo(scaleX(t.points[i].x), scaleY(t.points[i].y));
-          }
-          ctx.stroke();
-          ctx.setLineDash([]);
-          const last = t.points[t.points.length - 1];
-          const prev = t.points[t.points.length - 2];
-          const angle = Math.atan2(scaleY(last.y - prev.y), scaleX(last.x - prev.x));
-          ctx.fillStyle = '#10b981';
-          ctx.beginPath();
-          ctx.moveTo(scaleX(last.x), scaleY(last.y));
-          ctx.lineTo(scaleX(last.x) - 10 * Math.cos(angle - Math.PI / 6), scaleY(last.y) - 10 * Math.sin(angle - Math.PI / 6));
-          ctx.lineTo(scaleX(last.x) - 10 * Math.cos(angle + Math.PI / 6), scaleY(last.y) - 10 * Math.sin(angle + Math.PI / 6));
-          ctx.closePath();
-          ctx.fill();
-        }
-      });
-    }
+    // ── Draw Trajectories (Predicted Paths) ──
+    const entities = data.entities || [];
+    entities.forEach(entity => {
+      const path = entity.predicted_trajectory;
+      if (path && path.length > 1) {
+        ctx.strokeStyle = '#10b981';
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        // Robotics-ER returns trajectory points as [y, x]
+        const startPos = entity.current_position || path[0];
+        ctx.moveTo(scaleX(startPos[1]), scaleY(startPos[0]));
+        
+        path.forEach(pt => {
+          ctx.lineTo(scaleX(pt[1]), scaleY(pt[0]));
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
   }, [data, preview]);
 
   return (

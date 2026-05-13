@@ -7,6 +7,7 @@ Two specialized agents orchestrated for industrial safety:
 
 from .field_operator import FieldOperator
 from .auditor import Auditor
+from .supervisor import Supervisor
 from .orchestrator import Orchestrator
 
-__all__ = ["FieldOperator", "Auditor", "Orchestrator"]
+__all__ = ["FieldOperator", "Auditor", "Supervisor", "Orchestrator"]
