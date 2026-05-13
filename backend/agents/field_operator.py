@@ -230,8 +230,21 @@ class FieldOperator:
             # Prepare parts for multi-view or single view
             content_parts = []
             for img in images:
-                content_parts.append(types.Part.from_bytes(data=img["bytes"], mime_type=img["mime_type"]))
+                mime = img["mime_type"]
+                # Normalize mime types to avoid "video/text/timestamp" errors
+                if "video" in mime and "text" not in mime:
+                    mime = "video/mp4" # Force standard video mime if it's a video
+                elif "image" in mime:
+                    pass # Images are usually fine
+                else:
+                    logger.warning(f"[{self.AGENT_NAME}] Skipping unsupported mime type: {mime}")
+                    continue
+
+                content_parts.append(types.Part.from_bytes(data=img["bytes"], mime_type=mime))
             
+            if not content_parts:
+                return _error_result("No valid images/videos provided", 0, self.AGENT_NAME)
+
             # Add system prompt
             prompt = _build_system_prompt()
             if len(images) > 1:
@@ -251,7 +264,7 @@ class FieldOperator:
             result = _parse_json(response.text)
             result["processing_time_ms"] = int((time.time() - start) * 1000)
             result["agent"] = self.AGENT_NAME
-            logger.info(f"[{self.AGENT_NAME}] Scene analyzed ({len(images)} views) — risk={result.get('overall_risk_score')}, time={result['processing_time_ms']}ms")
+            logger.info(f"[{self.AGENT_NAME}] Scene analyzed ({len(content_parts)} valid views) — risk={result.get('overall_risk_score')}, time={result['processing_time_ms']}ms")
             return result
         except Exception as e:
             logger.error(f"[{self.AGENT_NAME}] Scene analysis failed: {e}")
