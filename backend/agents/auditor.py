@@ -123,7 +123,7 @@ Perform your OSHA compliance audit now."""
                 contents=[prompt, user_content],
                 config=types.GenerateContentConfig(
                     temperature=0.2,
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                    thinking_config=types.ThinkingConfig(thinking_budget=512),
                 ),
             )
 

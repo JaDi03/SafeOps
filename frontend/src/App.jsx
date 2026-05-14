@@ -162,6 +162,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('hazards');
   const [isSystemActive, setIsSystemActive] = useState(false);
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
+  const [lastAnalysisTime, setLastAnalysisTime] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [policy, setPolicy] = useState(null);
   const [policyDraft, setPolicyDraft] = useState('');
 
@@ -196,19 +198,23 @@ export default function App() {
     }));
   };
 
-  // ── Continuous Monitoring Loop ──
+  // ── Smart Continuous Monitoring Loop ──
   useEffect(() => {
-    let interval;
+    let timeoutId;
+    
+    const runSentinel = async () => {
+      if (isSystemActive) {
+        await startOperation();
+        // Only schedule the next run after the current one finishes
+        timeoutId = setTimeout(runSentinel, 5000); 
+      }
+    };
+
     if (isSystemActive) {
-      // Analyze immediately on start
-      startOperation();
-      
-      // Then analyze every 10 seconds
-      interval = setInterval(() => {
-        startOperation();
-      }, 10000);
+      runSentinel();
     }
-    return () => clearInterval(interval);
+
+    return () => clearTimeout(timeoutId);
   }, [isSystemActive]);
 
   const startOperation = async () => {
@@ -228,6 +234,7 @@ export default function App() {
     try {
       const result = await analyzeScene(activeSlots.map(s => s.file));
       setAnalysisResult(result);
+      setLastAnalysisTime(new Date().toLocaleTimeString());
       
       setSlots(prev => {
         const next = { ...prev };

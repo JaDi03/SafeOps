@@ -75,7 +75,7 @@ class Supervisor:
                 contents=[prompt, user_content],
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                    thinking_config=types.ThinkingConfig(thinking_budget=512),
                 ),
             )
             
