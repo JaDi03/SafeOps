@@ -29,6 +29,7 @@ function formatUSD(n) {
 const ViewSlot = ({ id, title, icon, onFileSelect, preview, loading, data, specialty }) => {
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
+  const videoRef = useRef(null);
   const [fileType, setFileType] = useState('image');
 
   const handleClick = () => fileInputRef.current?.click();
@@ -114,10 +115,27 @@ const ViewSlot = ({ id, title, icon, onFileSelect, preview, loading, data, speci
         ctx.setLineDash([]);
       }
     });
-  }, [data, preview]);
+
+    // ── Freeze Frame Effect for Video ──
+    if (fileType === 'video' && videoRef.current) {
+      if (data) {
+        // Pause the video when we get a detection to match the static boxes
+        videoRef.current.pause();
+      }
+    }
+  }, [data, preview, fileType]);
+
+  // Handle play state during loading
+  useEffect(() => {
+    if (fileType === 'video' && videoRef.current) {
+      if (loading) {
+        videoRef.current.play().catch(e => console.log('Autoplay blocked:', e));
+      }
+    }
+  }, [loading, fileType]);
 
   return (
-    <div className={`view-slot ${loading ? 'loading' : ''}`} onClick={!preview ? handleClick : undefined}>
+    <div className={`view-slot ${loading ? 'loading' : ''}`} style={{ border: data && data.hazards?.length > 0 ? '2px solid #ef4444' : undefined, boxShadow: data && data.hazards?.length > 0 ? '0 0 20px rgba(239, 68, 68, 0.3)' : undefined }} onClick={!preview ? handleClick : undefined}>
       <div className="view-slot-header">
         <div className="view-slot-title">
           <span>{icon}</span> {title}
@@ -128,13 +146,24 @@ const ViewSlot = ({ id, title, icon, onFileSelect, preview, loading, data, speci
       {preview ? (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
           {fileType === 'video' ? (
-            <video src={preview} autoPlay muted loop style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video ref={videoRef} src={preview} autoPlay muted loop style={{ width: '100%', height: '100%', objectFit: 'cover', filter: data && data.hazards?.length > 0 ? 'grayscale(40%) contrast(120%)' : 'none' }} />
           ) : (
-            <img src={preview} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={preview} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: data && data.hazards?.length > 0 ? 'grayscale(40%) contrast(120%)' : 'none' }} />
           )}
           <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+          
+          {/* EVIDENCE CAPTURED OVERLAY */}
+          {data && data.hazards?.length > 0 && (
+            <div style={{ position: 'absolute', top: 35, right: 10, border: '2px solid #ef4444', color: '#ef4444', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 900, letterSpacing: '2px', background: 'rgba(239, 68, 68, 0.1)', backdropFilter: 'blur(4px)', transform: 'rotate(5deg)', zIndex: 20 }}>
+              🔴 EVIDENCE CAPTURED
+            </div>
+          )}
+
           {loading && <div className="loading-overlay"><div className="spinner" /></div>}
           <div className="view-slot-controls">
+            {data && fileType === 'video' && (
+               <button className="btn btn-sm btn-outline" style={{ marginRight: 8, borderColor: '#ef4444', color: '#ef4444' }} onClick={(e) => { e.stopPropagation(); videoRef.current?.play(); }}>▶️ Resume Feed</button>
+            )}
             <button className="btn btn-sm btn-outline" onClick={(e) => { e.stopPropagation(); handleClick(); }}>🔄 Change</button>
           </div>
         </div>
@@ -224,10 +253,14 @@ export default function App() {
       return;
     }
     
-    // Set loading state for active slots
+    // Only show loading spinner on first run to avoid blocking video feed
     setSlots(prev => {
       const next = { ...prev };
-      activeSlots.forEach(s => { next[s.id] = { ...next[s.id], loading: true }; });
+      activeSlots.forEach(s => { 
+        if (!next[s.id].data) {
+          next[s.id] = { ...next[s.id], loading: true }; 
+        }
+      });
       return next;
     });
 
@@ -326,9 +359,10 @@ export default function App() {
         </div>
 
         {lastAnalysisTime && isSystemActive && (
-          <div className="flex items-center gap-2 mb-6 px-4 py-2 bg-white/5 rounded-lg border border-white/10 w-fit">
-            <span className="text-xs text-white/40 uppercase tracking-widest font-medium">Last Intelligence Sync:</span>
-            <span className="text-xs text-blue-400 font-mono">{lastAnalysisTime}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite' }} />
+            <span style={{ fontSize: '0.7rem', color: '#10b981', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Sentinel Monitoring</span>
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', marginLeft: '8px' }}>Sync: {lastAnalysisTime}</span>
           </div>
         )}
       </header>
@@ -358,7 +392,7 @@ export default function App() {
             <div className="card">
               <div className="card-header"><div className="card-title">🧠 Agent Pipeline</div></div>
               <div className="card-body">
-                <div className="reasoning-box">
+                <div className="reasoning-box" style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '8px' }}>
                   {Object.values(slots).filter(s => s.data).slice(0, 1).map((s, i) => (
                     <div key={i} style={{ marginBottom: 16 }}>
                       {/* Supervisor Strategic Plan */}
