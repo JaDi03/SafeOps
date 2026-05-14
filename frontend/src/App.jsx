@@ -239,7 +239,7 @@ export default function App() {
       setSlots(prev => {
         const next = { ...prev };
         activeSlots.forEach(s => {
-          next[s.id] = { ...next[s.id], loading: false, data: result.field_report };
+          next[s.id] = { ...next[s.id], loading: false, data: result };
         });
         return next;
       });
