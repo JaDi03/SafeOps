@@ -39,7 +39,7 @@ def _load_policy() -> str:
 def _build_system_prompt() -> str:
     policy = _load_policy()
     return f"""You are the FIELD OPERATOR AGENT of SafeOps — an industrial safety AI system.
-Your model is Gemini Robotics-ER 1.6, specialized in spatial reasoning.
+Your model is Gemini 2.5 Flash, optimized for real-time industrial intelligence.
 
 YOUR MISSION: Analyze every pixel. Detect every risk. Save lives.
 
@@ -218,7 +218,7 @@ class FieldOperator:
 
     def __init__(self):
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        logger.info(f"FieldOperator agent initialized — model={self.MODEL}")
+        logger.info(f"FieldOperator agent initialized — HIGH-SPEED mode enabled (model={self.MODEL})")
 
     async def analyze_scene(self, images: list[dict], task: str = "general") -> dict:
         """
