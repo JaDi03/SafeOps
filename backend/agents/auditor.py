@@ -122,8 +122,7 @@ Perform your OSHA compliance audit now."""
                 model=self.MODEL,
                 contents=[prompt, user_content],
                 config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    thinking_config=types.ThinkingConfig(thinking_budget=512),
+                    temperature=0.0,
                 ),
             )
 

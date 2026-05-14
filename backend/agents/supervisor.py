@@ -74,8 +74,7 @@ class Supervisor:
                 model=self.MODEL,
                 contents=[prompt, user_content],
                 config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    thinking_config=types.ThinkingConfig(thinking_budget=512),
+                    temperature=0.0,
                 ),
             )
             

@@ -267,8 +267,7 @@ class FieldOperator:
                 model=self.MODEL,
                 contents=content_parts,
                 config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024),
+                    temperature=0.0,
                     tools=tools,
                 ),
             )
@@ -294,8 +293,7 @@ class FieldOperator:
                     TRAJECTORY_PROMPT,
                 ],
                 config=types.GenerateContentConfig(
-                    temperature=0.5,
-                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
+                    temperature=0.0,
                 ),
             )
             result = _parse_json(response.text)
